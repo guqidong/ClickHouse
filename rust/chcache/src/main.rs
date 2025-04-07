@@ -4,6 +4,10 @@ use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 
+mod compiler;
+mod rustc;
+mod clang;
+
 #[derive(Debug, serde::Deserialize)]
 #[serde(default)]
 struct Config {
