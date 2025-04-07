@@ -1,18 +1,18 @@
-use crate::compiler::Compiler;
+use crate::traits::compiler::Compiler;
+use crate::traits::compiler::CompilerMeta;
 
 pub struct Clang {
     args: Vec<String>,
 }
 
+impl CompilerMeta for Clang {
+    const NAME: &'static str = "clang";
+    fn from_args(args: Vec<String>) -> Box<dyn Compiler> {
+        Box::new(Clang { args })
+    }
+}
+
 impl Compiler for Clang {
-    fn from_args(args: Vec<String>) -> Self {
-        Self { args }
-    }
-
-    fn name(&self) -> &str {
-        "clang"
-    }
-
     fn compile(&self) -> Result<Vec<u8>, String> {
         let output = std::process::Command::new("clang")
             .args(&self.args)
@@ -21,7 +21,7 @@ impl Compiler for Clang {
         if !output.status.success() {
             return Err(String::from_utf8_lossy(&output.stderr).to_string());
         }
-        Ok(())
+        Ok(vec![])
     }
 
     fn cache_key(&self) -> String {
@@ -37,3 +37,6 @@ impl Compiler for Clang {
         true
     }
 }
+
+// impl Compiler for ClangXX {
+// }

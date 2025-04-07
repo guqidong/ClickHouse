@@ -4,9 +4,13 @@ use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 
-mod compiler;
-mod rustc;
-mod clang;
+mod traits;
+mod compilers;
+
+use crate::traits::compiler::{Compiler, CompilerMeta};
+use crate::compilers::clang::Clang;
+use crate::compilers::rustc::RustC;
+
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(default)]
@@ -352,10 +356,6 @@ fn rust_should_cache(args: &[String]) -> bool {
     true
 }
 
-// [thevar1able@homebox memchr-2.7.4]$ /home/thevar1able/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name memchr --edition=2021 /home/thevar1able/.cargo/registry/src/-6df83624996e3d27/memchr-2.7.4/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --diagnostic-width=117 --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=2 --cfg feature=\"alloc\" --cfg feature=\"std\" --check-cfg "cfg(docsrs,test)" --check-cfg "cfg(feature, values(\"alloc\", \"compiler_builtins\", \"core\", \"default\", \"libc\", \"logging\", \"rustc-dep-of-std\", \"std\", \"use_std\"))" -C metadata=f0ff90587188d79c -C extra-filename=-5282d705ff339125 --out-dir /home/thevar1able/nvmemount/clickhouse/cmake-build-debug/./cargo/build/x86_64-unknown-linux-gnu/debug/deps --target x86_64-unknown-linux-gnu -C linker=/usr/bin/clang -L dependency=/home/thevar1able/nvmemount/clickhouse/cmake-build-debug/./cargo/build/x86_64-unknown-linux-gnu/debug/deps -L dependency=/home/thevar1able/nvmemount/clickhouse/cmake-build-debug/./cargo/build/debug/deps --cap-lints allow -C link-arg=-fuse-ld=lld | head -n1
-// {"$message_type":"artifact","artifact":"/home/thevar1able/nvmemount/clickhouse/cmake-build-debug/./cargo/build/x86_64-unknown-linux-gnu/debug/deps/memchr-5282d705ff339125.d","emit":"dep-info"}
-// {"$message_type":"artifact","artifact":"/home/thevar1able/nvmemount/clickhouse/cmake-build-debug/./cargo/build/x86_64-unknown-linux-gnu/debug/deps/libmemchr-5282d705ff339125.rmeta","emit":"metadata"}
-// {"$message_type":"artifact","artifact":"/home/thevar1able/nvmemount/clickhouse/cmake-build-debug/./cargo/build/x86_64-unknown-linux-gnu/debug/deps/libmemchr-5282d705ff339125.rlib","emit":"link"}
 
 async fn compiler_cache_entrypoint(config: &Config) {
     let compiler: String = std::env::args().nth(1).unwrap();
@@ -363,6 +363,15 @@ async fn compiler_cache_entrypoint(config: &Config) {
 
     trace!("Compiler: {}", compiler);
     trace!("Args: {:?}", rest_of_args);
+
+    let provider = match compiler.as_str() {
+        RustC::NAME => RustC::from_args(rest_of_args),
+        Clang::NAME => Clang::from_args(rest_of_args),
+        ClangXX::NAME => ClangXX::from_args(rest_of_args),
+        _ => {
+            panic!("Unknown compiler: {}", compiler);
+        }
+    };
 
     let cwd = std::env::current_dir()
         .unwrap()
