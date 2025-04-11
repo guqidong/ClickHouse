@@ -112,7 +112,10 @@ async fn compiler_cache_entrypoint(config: &Config) -> Result<(), Box<dyn Error>
 
                     bytes
                 }
-                Err(_) => compiler.compile().expect("Unable to compile"),
+                Err(e) => {
+                    trace!("Got error from CH: {:?}", e);
+                    compiler.compile().expect("Unable to compile")
+                }
             };
 
             compiled_bytes
