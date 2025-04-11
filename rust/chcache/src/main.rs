@@ -139,7 +139,11 @@ async fn compiler_cache_entrypoint(config: &Config) -> Result<(), Box<dyn Error>
         let mut tries = 3;
         loop {
             let upload_result = clickhouse_disk
-                .write(&total_hash, &compiler_version, &compiled_bytes)
+                .write(
+                    &compiler_version,
+                    &total_hash,
+                    &compiled_bytes,
+                )
                 .await;
 
             if upload_result.is_ok() {
