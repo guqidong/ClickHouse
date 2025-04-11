@@ -1,16 +1,34 @@
+use blake3::Hasher;
 use log::trace;
+use std::error::Error;
+use std::fs;
+use std::io::Cursor;
+use std::path::Path;
 
 use crate::traits::compiler::{Compiler, CompilerMeta};
 
 pub struct RustC {
+    compiler_path: String,
+
     args: Vec<String>,
+    out_dir: String,
 }
 
 impl CompilerMeta for RustC {
     const NAME: &'static str = "rustc";
 
-    fn from_args(args: Vec<String>) -> Box<dyn Compiler> {
-        Box::new(RustC { args })
+    fn from_args(compiler_path: String, args: Vec<String>) -> Box<dyn Compiler> {
+        let out_dir = args
+            .iter()
+            .position(|x| x == "--out-dir")
+            .map(|x| args[x + 1].clone())
+            .unwrap_or(String::new());
+
+        Box::new(RustC {
+            compiler_path,
+            args,
+            out_dir,
+        })
     }
 }
 
@@ -20,19 +38,111 @@ impl CompilerMeta for RustC {
 // {"$message_type":"artifact","artifact":"/home/thevar1able/nvmemount/clickhouse/cmake-build-debug/./cargo/build/x86_64-unknown-linux-gnu/debug/deps/libmemchr-5282d705ff339125.rlib","emit":"link"}
 impl Compiler for RustC {
     fn cache_key(&self) -> String {
-        self.args.join(" ")
+        let mut maybe_basepath: Vec<String> = vec![];
+
+        for (i, arg) in self.args.iter().enumerate() {
+            if arg.starts_with("--out-dir") {
+                maybe_basepath.push(self.args[i + 1].to_string());
+                continue;
+            }
+            if arg == "-C" || arg == "-L" {
+                let next = self.args[i + 1].to_string();
+
+                if next.starts_with("path=") {
+                    maybe_basepath.push(next[5..].to_string());
+                    continue;
+                }
+
+                if next.starts_with("dependency=") {
+                    maybe_basepath.push(next[11..].to_string());
+                    continue;
+                }
+
+                if next.starts_with("native=") {
+                    maybe_basepath.push(next[7..].to_string());
+                    continue;
+                }
+
+                continue;
+            }
+        }
+
+        trace!("Maybe basepath: {:?}", maybe_basepath);
+
+        let maybe_basepaths_sep_by_slash: Vec<Vec<String>> = maybe_basepath
+            .into_iter()
+            .map(|x| x.split("/").map(|x| x.to_string()).collect())
+            .collect();
+        let mut basepath = "".to_string();
+
+        'outer: for i in 0..maybe_basepaths_sep_by_slash[0].len() {
+            for j in 1..maybe_basepaths_sep_by_slash.len() {
+                if maybe_basepaths_sep_by_slash[0][i] != maybe_basepaths_sep_by_slash[j][i] {
+                    basepath = basepath.trim_end_matches('/').to_string();
+
+                    break 'outer;
+                }
+            }
+
+            basepath.push_str(&maybe_basepaths_sep_by_slash[0][i]);
+            basepath.push_str("/");
+        }
+
+        basepath = basepath.trim_end_matches('/').to_string();
+        trace!("Basepath: {:?}", basepath);
+        assert!(!basepath.is_empty());
+        assert!(!basepath.ends_with('/'));
+
+        let mut stripped_args = self
+            .args
+            .clone()
+            .iter()
+            .map(|x| x.replace(&basepath, "./"))
+            .collect::<Vec<String>>();
+
+        if let Some(index) = stripped_args.iter().position(|x| x == "--out-dir") {
+            stripped_args.remove(index);
+            stripped_args.remove(index);
+        }
+
+        if let Some(index) = stripped_args.iter().position(|x| x.starts_with("--diagnostic-width")) {
+            stripped_args.remove(index);
+        }
+
+        trace!("Stripped args: {:?}", stripped_args);
+
+        let mut hasher = Hasher::new();
+
+        stripped_args.iter().map(|x| x.as_bytes()).for_each(|x| {
+            hasher.update(&x);
+        });
+
+        hasher.finalize().to_string()
+    }
+
+    fn version(&self) -> String {
+        trace!("Using compiler: {}", self.compiler_path);
+
+        let compiler_version = std::process::Command::new(self.compiler_path.clone())
+            .arg("-V")
+            .output()
+            .expect("Failed to execute command");
+
+        String::from_utf8_lossy(&compiler_version.stdout).to_string()
     }
 
     fn cacheable(&self) -> bool {
-        if self
-            .args
-            .iter()
-            .any(|arg| arg == "--version" || arg == "--help" || arg == "--explain" || arg == "-vV")
-        {
+        if self.out_dir.is_empty() {
             return false;
         }
 
-        if self.args.iter().any(|arg| arg == "--print") {
+        if self.args.iter().any(|arg| {
+            arg == "--version"
+                || arg == "--help"
+                || arg == "--explain"
+                || arg == "-vV"
+                || arg == "--print"
+        }) {
             return false;
         }
 
@@ -41,105 +151,26 @@ impl Compiler for RustC {
             return false;
         }
 
-        // if self.args.iter().any(|arg| arg.contains("emit=link")) {
-        //     return false;
-        // }
+        if self.args.iter().any(|arg| arg.contains("emit=link")) {
+            return false;
+        }
 
         true
     }
 
-    fn compile(&self, source: &str) -> Result<Vec<u8>, String> {
-        let out_dir = self
-            .args
-            .iter()
-            .position(|x| x == "--out-dir")
-            .map(|x| self.args[x + 1].clone())
-            .unwrap();
+    fn apply_cache(&self, bytes: &Vec<u8>) -> Result<(), Box<dyn Error>> {
+        trace!("Out dir: {:?}", self.out_dir);
 
-        trace!("Out dir: {:?}", out_dir);
+        let cursor = Cursor::new(bytes);
+        let mut archive = tar::Archive::new(cursor);
+        archive.unpack(&self.out_dir)?;
 
-        let mut hasher = Hasher::new();
-        rest_of_args.iter().map(|x| x.as_bytes()).for_each(|x| {
-            hasher.update(&x);
-        });
-        let args_hash = hasher.finalize().to_string();
-
-        let compiled_bytes: Vec<u8> = match get_from_fscache(&args_hash) {
-            Some(bytes) => {
-                info!("Local cache hit");
-
-                let cursor = Cursor::new(bytes.clone());
-                let mut archive = tar::Archive::new(cursor);
-                archive.unpack(out_dir).expect("Unable to unpack tar");
-
-                bytes
-            }
-            None => {
-                trace!("Cache miss");
-
-                let output = std::process::Command::new(compiler)
-                    .args(&rest_of_args)
-                    .output()
-                    .unwrap();
-
-                if !output.status.success() {
-                    println!("{}", String::from_utf8_lossy(&output.stdout));
-                    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-                    std::process::exit(output.status.code().unwrap_or(1));
-                }
-
-                let files_to_pack = String::from_utf8_lossy(&output.stderr);
-                eprintln!("{}", String::from_utf8_lossy(&output.stdout));
-
-                let files_to_pack = files_to_pack
-                    .lines()
-                    .filter(|line| line.starts_with("{\"$message_type\":\"artifact\""))
-                    .collect::<Vec<&str>>();
-
-                let files_to_pack = files_to_pack
-                    .iter()
-                    .map(|x| {
-                        let json: serde_json::Value = serde_json::from_str(x).unwrap();
-                        let artifact = json["artifact"].as_str().unwrap();
-                        let artifact = artifact.replace("\"", "");
-                        artifact
-                    })
-                    .collect::<Vec<String>>();
-
-                trace!("Files to pack: {:?}", files_to_pack);
-                for (key, value) in std::env::vars() {
-                    // trace!("Env var: {}: {}", key, value);
-                    if key.starts_with("CARGO_") || key == "RUSTFLAGS" || key == "TARGET" {
-                        trace!("Maybe interesting env var {}: {}", key, value);
-                    }
-                }
-
-                let mut buffer = Vec::new();
-                let cursor = Cursor::new(&mut buffer);
-                let mut archive = tar::Builder::new(cursor);
-                for file in files_to_pack {
-                    let file = Path::new(&file);
-                    let filename = file.strip_prefix(&out_dir).unwrap();
-                    let filename = filename.to_str().unwrap();
-                    trace!("Packing file: {}", file.display());
-                    let mut packed_file = fs::File::open(file).unwrap();
-                    archive.append_file(filename, &mut packed_file).unwrap();
-                }
-                archive.finish().unwrap();
-                drop(archive);
-
-                buffer
-            }
-        };
-
-        write_to_fscache(&args_hash, &compiled_bytes);
-
-        return;
+        Ok(())
     }
 
-    fn passthrough() {
-        let output = std::process::Command::new(compiler)
-            .args(&rest_of_args)
+    fn compile(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+        let output = std::process::Command::new(self.compiler_path.clone())
+            .args(&self.args)
             .output()
             .unwrap();
 
@@ -149,12 +180,46 @@ impl Compiler for RustC {
             std::process::exit(output.status.code().unwrap_or(1));
         }
 
-        let output = String::from_utf8_lossy(&output.stdout);
-        let output = output
+        let files_to_pack = String::from_utf8_lossy(&output.stderr);
+        eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+
+        let files_to_pack = files_to_pack
             .lines()
-            .filter(|line| !line.is_empty())
-            .collect::<Vec<&str>>()
-            .join("\n");
-        println!("{}", output);
+            .filter(|line| line.starts_with("{\"$message_type\":\"artifact\""))
+            .collect::<Vec<&str>>();
+
+        let files_to_pack = files_to_pack
+            .iter()
+            .map(|x| {
+                let json: serde_json::Value = serde_json::from_str(x).unwrap();
+                let artifact = json["artifact"].as_str().unwrap();
+                let artifact = artifact.replace("\"", "");
+                artifact
+            })
+            .collect::<Vec<String>>();
+
+        trace!("Files to pack: {:?}", files_to_pack);
+        for (key, value) in std::env::vars() {
+            // trace!("Env var: {}: {}", key, value);
+            if key.starts_with("CARGO_") || key == "RUSTFLAGS" || key == "TARGET" {
+                trace!("Maybe interesting env var {}: {}", key, value);
+            }
+        }
+
+        let mut buffer = Vec::new();
+        let cursor = Cursor::new(&mut buffer);
+        let mut archive = tar::Builder::new(cursor);
+        for file in files_to_pack {
+            let file = Path::new(&file);
+            let filename = file.strip_prefix(&self.out_dir).unwrap();
+            let filename = filename.to_str().unwrap();
+            trace!("Packing file: {}", file.display());
+            let mut packed_file = fs::File::open(file).unwrap();
+            archive.append_file(filename, &mut packed_file).unwrap();
+        }
+        archive.finish().unwrap();
+        drop(archive);
+
+        Ok(buffer)
     }
 }
