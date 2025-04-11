@@ -93,11 +93,36 @@ impl Compiler for RustC {
         assert!(!basepath.is_empty());
         assert!(!basepath.ends_with('/'));
 
+        let cargo_manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        assert!(!cargo_manifest_dir.is_empty());
+
+        let cargo_manifest_dir = std::path::Path::new(&cargo_manifest_dir);
+
         let mut stripped_args = self
             .args
             .clone()
             .iter()
-            .map(|x| x.replace(&basepath, "./"))
+            .map(|x| {
+                if x.ends_with(".rs") {
+                    let path = std::path::Path::new(x);
+                    let stripped = {
+                        let mut p_iter = cargo_manifest_dir.components();
+                        let mut x_iter = path.components();
+
+                        while let (Some(p), Some(xp)) = (p_iter.next(), x_iter.next()) {
+                            if p != xp {
+                                break;
+                            }
+                        }
+
+                        x_iter.as_path()
+                    };
+                    trace!("Stripped path: {:?}", stripped);
+                    stripped.to_string_lossy().into_owned()
+                } else {
+                    x.replace(&basepath, "./")
+                }
+            })
             .collect::<Vec<String>>();
 
         if let Some(index) = stripped_args.iter().position(|x| x == "--out-dir") {
@@ -116,6 +141,7 @@ impl Compiler for RustC {
         stripped_args.iter().map(|x| x.as_bytes()).for_each(|x| {
             hasher.update(&x);
         });
+        hasher.update(std::env::var("CARGO_PKG_NAME").unwrap().as_bytes());
 
         hasher.finalize().to_string()
     }

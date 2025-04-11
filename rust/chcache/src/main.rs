@@ -95,7 +95,8 @@ async fn compiler_cache_entrypoint(config: &Config) -> Result<(), Box<dyn Error>
 
             bytes
         }
-        Err(..) => {
+        Err(e) => {
+            trace!("Got error: {:?}", e);
             trace!("Cache miss");
 
             let compiled_bytes = match clickhouse_disk.read(&compiler_version, &total_hash).await {
