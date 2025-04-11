@@ -207,7 +207,7 @@ impl Compiler for RustC {
         }
 
         let files_to_pack = String::from_utf8_lossy(&output.stderr);
-        eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+        // eprintln!("{}", String::from_utf8_lossy(&output.stdout));
 
         let files_to_pack = files_to_pack
             .lines()
