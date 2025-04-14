@@ -20,7 +20,7 @@ impl Disk for LocalDisk {
         let cache_file = self
             .local_path
             .get_cache_file(LocalDisk::path_from_hash(&hash));
-        trace!("Cache file: {:?}", cache_file);
+        trace!("Reading cache file: {:?}", cache_file);
 
         let data = fs::read(cache_file)?;
         return Ok(data);
@@ -30,6 +30,7 @@ impl Disk for LocalDisk {
         let cache_file = self
             .local_path
             .place_cache_file(LocalDisk::path_from_hash(&hash))?;
+        trace!("Writing cache file: {:?}", cache_file);
 
         let cache_file_dir = cache_file.parent().unwrap();
 

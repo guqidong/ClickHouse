@@ -5,7 +5,7 @@ use std::fs;
 use std::io::Cursor;
 use std::path::Path;
 
-use crate::traits::compiler::{Compiler, CompilerMeta};
+use crate::{compilers::clang::ClangLike, traits::compiler::{Compiler, CompilerMeta}};
 
 pub struct RustC {
     compiler_path: String,
@@ -134,6 +134,22 @@ impl Compiler for RustC {
             stripped_args.remove(index);
         }
 
+        // May have different linkers between developers.
+        // - "-C", "linker=/src/llvm/llvm-project/.cmake/bin/clang",
+        // + "-C", "linker=/usr/bin/clang",
+        let mut clang_linker_version: Option<String> = None;
+        if let Some(index) = stripped_args
+            .iter()
+            .position(|x| x.contains("linker="))
+        {
+            let linker = stripped_args[index].replace("linker=", "");
+            assert!(!linker.is_empty());
+            assert!(linker.ends_with("clang"));
+
+            clang_linker_version = Some(ClangLike::compiler_version(linker));
+            stripped_args.remove(index);
+        }
+
         trace!("Stripped args: {:?}", stripped_args);
 
         let mut hasher = Hasher::new();
@@ -142,6 +158,9 @@ impl Compiler for RustC {
             hasher.update(&x);
         });
         hasher.update(std::env::var("CARGO_PKG_NAME").unwrap().as_bytes());
+        if clang_linker_version.is_some() {
+            hasher.update(clang_linker_version.unwrap().as_bytes());
+        }
 
         hasher.finalize().to_string()
     }

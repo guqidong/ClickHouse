@@ -122,7 +122,7 @@ async fn compiler_cache_entrypoint(config: &Config) -> Result<(), Box<dyn Error>
         }
     };
 
-    if did_load_from_clickhouse {
+    if !did_load_from_clickhouse {
         local_disk
             .write(&total_hash, &compiled_bytes)
             .await

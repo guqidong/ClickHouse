@@ -99,10 +99,10 @@ impl ClangLike {
         basepath.trim_end_matches('/').to_string()
     }
 
-    fn compiler_version(&self) -> String {
-        trace!("Using compiler: {}", self.compiler_path);
+    pub fn compiler_version(compiler_path: String) -> String {
+        trace!("Using compiler: {}", compiler_path);
 
-        let compiler_version = std::process::Command::new(self.compiler_path.clone())
+        let compiler_version = std::process::Command::new(compiler_path.clone())
             .arg("-dM")
             .arg("-E")
             .arg("-x")
@@ -225,7 +225,7 @@ impl Compiler for ClangLike {
     }
 
     fn version(&self) -> String {
-        self.compiler_version()
+        ClangLike::compiler_version(self.compiler_path.clone())
     }
 
     fn cache_key(&self) -> String {
@@ -240,7 +240,7 @@ impl Compiler for ClangLike {
 
         let args_hash = hasher.finalize().to_string();
 
-        let compiler_version = self.compiler_version();
+        let compiler_version = self.version();
 
         trace!("Compiler version: {}", compiler_version);
 
