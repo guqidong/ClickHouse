@@ -75,3 +75,36 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 COPY --from=clickhouse/cctools:13cfebfd8f1bbc65ab49 /opt/gdb /opt/gdb
 ENV PATH="/opt/gdb/bin:${PATH}"
+ENV PREFIX=/opt/openssl-fips
+ENV OPENSSL_VERSION=3.1.2
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    wget \
+    perl \
+    python3 \
+    make \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+RUN wget https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz && \
+    tar xzf openssl-${OPENSSL_VERSION}.tar.gz && \
+    cd openssl-${OPENSSL_VERSION} && \
+    ./Configure enable-fips --prefix=${PREFIX} && \
+    make -j$(nproc) && \
+    make install_sw && \
+    make install_ssldirs && \
+    make install_fips && \
+    mv "${PREFIX}/ssl/openssl.cnf.dist" "${PREFIX}/ssl/openssl.cnf"
+
+RUN echo ".include ${PREFIX}/ssl/fipsmodule.cnf" >> ${PREFIX}/ssl/openssl.cnf
+RUN echo "[provider_sect]" >> ${PREFIX}/ssl/openssl.cnf
+RUN echo "fips = fips_sect" >> ${PREFIX}/ssl/openssl.cnf
+RUN echo "defautl = default_sect" >> ${PREFIX}/ssl/openssl.cnf
+
+ENV PATH="${PREFIX}/bin:$PATH"
+ENV OPENSSL_CONF=${PREFIX}/ssl/openssl.cnf
+ENV OPENSSL_MODULES="${PREFIX}/lib64/ossl-modules"
+WORKDIR /
