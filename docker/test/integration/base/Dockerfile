@@ -100,11 +100,27 @@ RUN wget https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz && \
     mv "${PREFIX}/ssl/openssl.cnf.dist" "${PREFIX}/ssl/openssl.cnf"
 
 RUN echo ".include ${PREFIX}/ssl/fipsmodule.cnf" >> ${PREFIX}/ssl/openssl.cnf
-RUN echo "[provider_sect]" >> ${PREFIX}/ssl/openssl.cnf
-RUN echo "fips = fips_sect" >> ${PREFIX}/ssl/openssl.cnf
-RUN echo "defautl = default_sect" >> ${PREFIX}/ssl/openssl.cnf
+RUN cat > ${PREFIX}/ssl/openssl.cnf <<EOF
+
+[openssl_init]
+providers = provider_sect
+alg_section = algorithm_sect
+
+[provider_sect]
+fips = fips_sect
+base = base_sect
+
+[base_sect]
+activate = 1
+
+[default_sect]
+activate = 0
+
+[algorithm_sect]
+default_properties = fips=yes
+EOF
 
 ENV PATH="${PREFIX}/bin:$PATH"
-# ENV OPENSSL_CONF=${PREFIX}/ssl/openssl.cnf
-# ENV OPENSSL_MODULES="${PREFIX}/lib64/ossl-modules"
+ENV OPENSSL_CONF=${PREFIX}/ssl/openssl.cnf
+ENV OPENSSL_MODULES="${PREFIX}/lib64/ossl-modules"
 WORKDIR /
