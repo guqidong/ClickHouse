@@ -105,6 +105,6 @@ RUN echo "fips = fips_sect" >> ${PREFIX}/ssl/openssl.cnf
 RUN echo "defautl = default_sect" >> ${PREFIX}/ssl/openssl.cnf
 
 ENV PATH="${PREFIX}/bin:$PATH"
-ENV OPENSSL_CONF=${PREFIX}/ssl/openssl.cnf
-ENV OPENSSL_MODULES="${PREFIX}/lib64/ossl-modules"
+# ENV OPENSSL_CONF=${PREFIX}/ssl/openssl.cnf
+# ENV OPENSSL_MODULES="${PREFIX}/lib64/ossl-modules"
 WORKDIR /
