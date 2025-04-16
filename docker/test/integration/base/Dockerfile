@@ -107,6 +107,7 @@ providers = provider_sect
 alg_section = algorithm_sect
 
 [provider_sect]
+default = default_sect
 fips = fips_sect
 base = base_sect
 
@@ -114,7 +115,7 @@ base = base_sect
 activate = 1
 
 [default_sect]
-activate = 0
+activate = 1
 
 [algorithm_sect]
 default_properties = fips=yes
