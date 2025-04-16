@@ -7,5 +7,4 @@ if (ENABLE_FUZZING)
 endif()
 
 add_compile_options( -fbracket-depth=4096 )
-# if increase to 4096 does not work, we'll try the next line
-#add_compile_options(-Wno-stack-exhausted)
+add_compile_options(-Wno-stack-exhausted)
