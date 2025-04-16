@@ -83,6 +83,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     perl \
     python3 \
+    rng-tools \
     make \
     git \
     ca-certificates \
@@ -130,4 +131,5 @@ EOF
 ENV PATH="${PREFIX}/bin:$PATH"
 ENV OPENSSL_CONF=${PREFIX}/ssl/openssl.cnf
 ENV OPENSSL_MODULES="${PREFIX}/lib64/ossl-modules"
+RUN rngd -r /dev/urandom
 WORKDIR /
