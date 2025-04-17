@@ -95,62 +95,6 @@ ENV PATH="/opt/gdb/bin:${PATH}"
 ENV TSAN_OPTIONS='halt_on_error=1 abort_on_error=1 history_size=7 memory_limit_mb=46080 second_deadlock_stack=1'
 ENV UBSAN_OPTIONS='print_stacktrace=1'
 ENV MSAN_OPTIONS='abort_on_error=1 poison_in_dtor=1'
-ENV PREFIX=/opt/openssl-fips
-ENV OPENSSL_VERSION=3.1.2
-
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    wget \
-    perl \
-    python3 \
-    rng-tools \
-    make \
-    git \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /tmp
-RUN wget https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz && \
-    tar xzf openssl-${OPENSSL_VERSION}.tar.gz && \
-    cd openssl-${OPENSSL_VERSION} && \
-    ./Configure enable-fips --prefix=${PREFIX} && \
-    make -j$(nproc) && \
-    make install_sw && \
-    make install_ssldirs && \
-    make install_fips && \
-    mv "${PREFIX}/ssl/openssl.cnf.dist" "${PREFIX}/ssl/openssl.cnf"
-
-RUN echo ".include ${PREFIX}/ssl/fipsmodule.cnf" >> ${PREFIX}/ssl/openssl.cnf
-RUN cat >> ${PREFIX}/ssl/openssl.cnf <<EOF
-[openssl_init]
-providers = provider_sect
-alg_section = algorithm_sect
-ssl_conf = ssl_sect
-
-[ssl_sect]
-system_default = system_default_sect
-
-[system_default_sect]
-CipherString = DEFAULT:@SECLEVEL=2
-
-[provider_sect]
-default = default_sect
-fips = fips_sect
-base = base_sect
-
-[base_sect]
-activate = 1
-
-[default_sect]
-activate = 1
-
-[algorithm_sect]
-default_properties = fips=yes
-EOF
-
-ENV PATH="${PREFIX}/bin:$PATH"
-ENV OPENSSL_CONF=${PREFIX}/ssl/openssl.cnf
-ENV OPENSSL_MODULES="${PREFIX}/lib64/ossl-modules"
 
 EXPOSE 2375
 ENTRYPOINT ["dockerd-entrypoint.sh"]
