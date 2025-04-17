@@ -122,16 +122,16 @@ CipherString = DEFAULT:@SECLEVEL=2
 [provider_sect]
 fips = fips_sect
 base = base_sect
+default = default_sect
 
 [base_sect]
 activate = 1
 
 [default_sect]
-activate = 0
+activate = 1
 
 EOF
 
-ENV PATH="${PREFIX}/bin:$PATH"
-ENV OPENSSL_CONF=${PREFIX}/ssl/openssl.cnf
+ENV OPENSSL_CONF="${PREFIX}/ssl/openssl.cnf"
 ENV OPENSSL_MODULES="${PREFIX}/lib64/ossl-modules"
 WORKDIR /
