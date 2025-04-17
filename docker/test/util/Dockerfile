@@ -107,7 +107,7 @@ RUN wget https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz && \
     mv "${PREFIX}/ssl/openssl.cnf.dist" "${PREFIX}/ssl/openssl.cnf"
 
 RUN echo ".include ${PREFIX}/ssl/fipsmodule.cnf" >> ${PREFIX}/ssl/openssl.cnf
-RUN cat > ${PREFIX}/ssl/openssl.cnf <<EOF
+RUN cat >> ${PREFIX}/ssl/openssl.cnf <<EOF
 
 [openssl_init]
 providers = provider_sect
